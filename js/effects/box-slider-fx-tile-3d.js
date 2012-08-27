@@ -12,26 +12,42 @@
     };
 
     adaptor.initialize = function ($box, $slides, settings) {
-      var rows = (settings.tileRows || 5)
-        , side = $box.height() / rows
-        , cols = Math.ceil($box.width() / side)
-        , imgURL = slideImageURL($slides.eq(0))
+      var imgURL = slideImageURL($slides.eq(0)) // ----------------------------- extract this fn out into the main plugin
         , $wrapper = $(document.createElement('div'))
         , fromLeft = 0
         , fromTop = 0
         , i = 0
-        , j = 0;
-
+        , j = 0
+        , rows
+        , cols
+        , tileSpeed;
+        
+      // tile grid
+      settings.tileSize || (settings.tileSize = 75);
+      rows = settings.tileRows = $box.width() / settings.tileSize;
+      cols = settings.tileCols = Math.ceil($box.width() / settings.tileSize);
+      
+      // timing offsets
+      settings.tileTimings = $.extend({}, {
+          row: 50
+        , tile: 25
+      }, settings.tileTimings);
+      settings.tileTimings.tileSpeed = settings.speed - (
+        (rows * settings.tileTimings.row) +
+        (cols * settings.tileTimings.tile)
+      );
+      
       for (; i < rows; ++i) {
-        fromTop = i * side;
+        fromTop = i * settings.tileSize;
 
         for (j = 0; j < cols; ++j) {
-          fromLeft = j * side;
+          fromLeft = j * settings.tileSize;
           $wrapper.append(createTile({
               fromTop: fromTop
-            , fromLeft: j * side
-            , imgURL: imgURL 
-            , side: side
+            , fromLeft: j * settings.tileSize
+            , imgURL: imgURL
+            , side: settings.tileSize
+            , speed: (settings.tileTimings.tileSpeed / 1000) + 's'
           }));
         }
       }
@@ -49,12 +65,14 @@
 
     adaptor.transition = function (settings) {
       var $tiles = settings.$tileWrapper.find('.bs-tile')
-        , intv = 20
         , imgSrc = slideImageURL(settings.$nextSlide)
         , nextFace = settings.nextFace || 'back'
         , faceClass = '.bs-tile-face-' + nextFace
         , ret = {}
-        , angle;
+        , angle
+        , i = 0
+        , j = 0
+        , rowStart;
 
       if (nextFace === 'back') {
         ret.nextFace = 'front';
@@ -67,16 +85,27 @@
 
       $tiles.find(faceClass).css('background-image', 'url(' + imgSrc + ')');
 
-      $tiles.each(function (i, tile) {
-        (function () {
-          var to = i * intv
-            , $tile = $(tile);
-
+      for (; i < settings.tileRows; ++i) {
+        rowStart = i * settings.tileTimings.row;
+        
+        (function (rowStart, i) {
           setTimeout(function () {
-            $tile.css(vendorPrefix + 'transform', 'rotate3d(0,1,0,' + angle + 'deg)');
-          }, to);
-        }());
-      });
+            for (j = 0; j < settings.tileCols; ++j) {
+              gridIndex = (i * settings.tileCols) + j;
+              
+              (function () {
+                var to = rowStart + j * settings.tileTimings.tile
+                  , $tile = $tiles.eq(gridIndex);
+      
+                setTimeout(function () {
+                  $tile.css(vendorPrefix + 'transform', 'rotate3d(0,1,0,' + angle + 'deg)');
+                }, to);
+              }());
+            }
+          }, rowStart);
+        }(rowStart, i));
+      }
+      
       return ret;
     };
 
@@ -92,7 +121,7 @@
       var $tileHolder = $(document.createElement('div'))
         , $tile = $(document.createElement('div'))
         , $front = $(document.createElement('div'))
-        , back = document.createElement('div'); 
+        , back = document.createElement('div');
 
       $tileHolder
         .css({
@@ -108,7 +137,7 @@
         .addClass('bs-tile')
         .css({width: opts.side, height: opts.side})
         .css(vendorPrefix + 'transform-style', 'preserve-3d')
-        .css(vendorPrefix + 'transition', vendorPrefix + 'transform .4s')
+        .css(vendorPrefix + 'transition', vendorPrefix + 'transform ' + opts.speed)
         .appendTo($tileHolder);
 
       back.style[vendorPrefix + 'transform'] = 'rotateY(180deg)';
